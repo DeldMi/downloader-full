@@ -3,15 +3,19 @@
   "version": "1.0.0",
   "description": "",
   "license": "ISC",
-  "author": "",
+  "author": "DeldMi",
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "dev": "npm nodemon --watch backend --watch frontend --exec \"npm-run-all --parallel backend-dev frontend-dev\"",
-    "backend-dev": "cd backend && npm run dev",
-    "frontend-dev": "cd frontend && npm run dev",
-    "build": "cd frontend && npm run build",
-    "start": "node backend/server.js",
-    "lint": "cd frontend && npm run lint"
+    "start:backend": "node backend/server.js",
+    "start:frontend": "cd frontend && npm run dev",
+    "start:dev": "concurrently \"npm run start:backend\" \"npm run start:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "nodemon": "^3.1.10"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3"
   }
 }
