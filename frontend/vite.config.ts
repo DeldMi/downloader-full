@@ -7,7 +7,7 @@ const { env } = process;
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: env.PORT_FRONTEND,
+    port: Number(env.PORT_FRONTEND),
     host: true,
     proxy: {
       '/api': env.API_URL

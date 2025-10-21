@@ -2,6 +2,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+require('dotenv').config();
+const { env } = process;
+
 
 
 
@@ -9,7 +12,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: env.PORT_FRONTEND,
+    port: Number(env.PORT_FRONTEND),
     host: true,
     proxy: {
       '/api': env.API_URL
