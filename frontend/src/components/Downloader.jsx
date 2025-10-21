@@ -4,17 +4,77 @@ import axios from "axios";
 export default function Downloader() {
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
-  const [format, setFormat] = useState("mp4");// se for o formato padao ele tem que detequitaca se for vidio o padrao é mp4 se for audio é mp3 e tambem tem que vim do servidor
+  const [format, setFormat] = useState();// 
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState("");
   const [meta, setMeta] = useState({ title: null, format: null, mimeType: null, thumbnailUrl: null });
   const [taskId, setTaskId] = useState(null);
   const [running, setRunning] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState(null);
-  const formats = ["mp4", "mkv", "webm", "mp3", "ts"]; // isso aqui tem que vim do servidor
+  const [availableFormats, setAvailableFormats] = useState([]); // Formatos de saida que vem do servidor
   const infoTimer = useRef(null);
+  const [serverConfig, setServerConfig] = useState(null);
+
+  // Detectar e ajustar formato automaticamente quando meta, url ou serverConfig mudarem
+  useEffect(() => {
+    // helper para pegar extensão
+    const extFromUrl = (u) => {
+      try {
+        const clean = u.split('?')[0];
+        const parts = clean.split('.');
+        if (parts.length > 1) return parts[parts.length - 1].toLowerCase();
+      } catch {
+        // ignore parsing errors
+      }
+      return null;
+    };
+
+    // 1) preferir meta.format
+    if (meta?.format && availableFormats.includes(meta.format)) {
+      setFormat(meta.format);
+      return;
+    }
+
+    // 2) tentar pela extensão da URL
+    if (url) {
+      const ext = extFromUrl(url);
+      if (ext) {
+        // mapear algumas extensões comuns
+        const map = { 'm3u8': 'mp4', 'm3u': 'mp4', 'ts': 'mp4', 'mp3': 'mp3', 'wav': 'mp3' };
+        const candidate = map[ext] || ext;
+        if (availableFormats.includes(candidate)) {
+          setFormat(candidate);
+          return;
+        }
+      }
+    }
+
+    // 3) usar default do servidor se existir
+    if (serverConfig && serverConfig.defaultFormat && availableFormats.includes(serverConfig.defaultFormat)) {
+      setFormat(serverConfig.defaultFormat);
+      return;
+    }
+
+    // Caso contrário manter o formato atual (não alterar)
+  }, [meta, url, serverConfig, availableFormats]);
 
   useEffect(() => {
+    // carregar configurações do servidor
+    (async () => {
+      try {
+        const { data } = await axios.get('/api/config');
+        setServerConfig(data.config || null);
+        if (data.config && Array.isArray(data.config.formats)) {
+          setAvailableFormats(data.config.formats);
+        }
+        if (data.config && data.config.defaultFormat) {
+          setFormat(data.config.defaultFormat);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+
     if (infoTimer.current) clearTimeout(infoTimer.current);
     if (!url) {
       setMeta({ title: null, format: null, mimeType: null, thumbnailUrl: null });
@@ -41,6 +101,18 @@ export default function Downloader() {
       setMessage("Por favor, insira uma URL.");
       return;
     }
+    // validar formato com o backend antes de iniciar
+    try {
+      const { data: v } = await axios.post('/api/validate-format', { url, format });
+      if (!v.allowed) {
+        setMessage(`Formato não permitido: ${v.ext || 'desconhecido'}`);
+        return;
+      }
+    } catch {
+      setMessage('Erro ao validar formato');
+      return;
+    }
+
     setMessage("Iniciando download...");
     setRunning(true);
     setDownloadUrl(null);
@@ -126,12 +198,15 @@ export default function Downloader() {
         <input
           value={url}
           onChange={e => {
-            setUrl(e.target.value);
+            const v = e.target.value;
+            setUrl(v);
             setProgress(0);
             setMessage("");
             setTaskId(null);
             setDownloadUrl(null);
             setName("");
+            // reset format to server default if provided
+            if (serverConfig && serverConfig.defaultFormat) setFormat(serverConfig.defaultFormat);
           }}
           placeholder="Cole a URL do vídeo aqui"
         />
@@ -141,20 +216,20 @@ export default function Downloader() {
 
         <label>Formato de saída:</label>
         <select value={format} onChange={e => setFormat(e.target.value)}>
-          {formats.map(f => (
+          {availableFormats.map(f => (
             <option key={f} value={f}>{f}</option>
           ))}
         </select>
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={startDownload} disabled={running}>⬇️ Download</button>
-          <button onClick={cancelDownload} disabled={!running} className="cancel">🛑 Cancelar</button>
+          <button onClick={startDownload} disabled={running}>{(serverConfig && serverConfig.ui && serverConfig.ui.downloadButtonText) || '⬇️ Download'}</button>
+          <button onClick={cancelDownload} disabled={!running} className="cancel">🛑 {(serverConfig && serverConfig.ui && serverConfig.ui.cancelText) || 'Cancelar'}</button>
         </div>
 
         {downloadUrl && (
           <div style={{ marginTop: 10 }}>
             <button onClick={handleManualDownload} className="download-ready">
-              📥 Baixar Arquivo
+              {(serverConfig && serverConfig.ui && serverConfig.ui.manualDownloadText) || '📥 Baixar Arquivo'}
             </button>
             <button onClick={() => {
               setDownloadUrl(null);
@@ -164,7 +239,7 @@ export default function Downloader() {
               setUrl("");
               setName("");
             }} style={{ marginLeft: 10 }}>
-              ⚡ Fazer outro download
+              {(serverConfig && serverConfig.ui && serverConfig.ui.anotherDownloadText) || '⚡ Fazer outro download'}
             </button>
           </div>
         )}
