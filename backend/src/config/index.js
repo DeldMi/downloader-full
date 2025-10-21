@@ -2,11 +2,12 @@ require('dotenv').config();
 
 const config = {
   port: process.env.PORT || 4000,
+  portFrontend: process.env.PORT_FRONTEND || 5174,
   downloadDir: process.env.DOWNLOAD_DIR || 'downloads',
   logDir: process.env.LOG_DIR || 'logs',
   ffmpegPath: process.env.FFMPEG_PATH || 'ffmpeg',
   // Frontend-related configuration
-  formats: process.env.FORMATS ? process.env.FORMATS.split(',') : ['mp4','mkv', 'webm', 'mp3', "m3u8"],
+  formats: process.env.FORMATS ? process.env.FORMATS.split(',') : ['mp4', 'mkv', 'webm', 'mp3', 'aac', 'flac', 'wav', 'm4a', 'ts'],
   // defaultFormat can be a simple value or an object with rules
   defaultFormat: process.env.DEFAULT_FORMAT || 'mp4',
   ui: {

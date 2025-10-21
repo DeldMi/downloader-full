@@ -1,19 +1,25 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { ServerConfig, FileMeta, DownloadResponse, DownloadProgress } from "@/types";
 
 export default function Downloader() {
-  const [url, setUrl] = useState("");
-  const [name, setName] = useState("");
-  const [format, setFormat] = useState();// 
-  const [progress, setProgress] = useState(0);
-  const [message, setMessage] = useState("");
-  const [meta, setMeta] = useState({ title: null, format: null, mimeType: null, thumbnailUrl: null });
-  const [taskId, setTaskId] = useState(null);
-  const [running, setRunning] = useState(false);
-  const [downloadUrl, setDownloadUrl] = useState(null);
-  const [availableFormats, setAvailableFormats] = useState([]); // Formatos de saida que vem do servidor
-  const infoTimer = useRef(null);
-  const [serverConfig, setServerConfig] = useState(null);
+  const [url, setUrl] = useState<string>("");
+  const [name, setName] = useState<string>("");
+  const [format, setFormat] = useState<string>();
+  const [progress, setProgress] = useState<number>(0);
+  const [message, setMessage] = useState<string>("");
+  const [meta, setMeta] = useState<FileMeta>({ 
+    title: null, 
+    format: null, 
+    mimeType: null, 
+    thumbnailUrl: null 
+  });
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [running, setRunning] = useState<boolean>(false);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [availableFormats, setAvailableFormats] = useState<string[]>([]); 
+  const infoTimer = useRef<NodeJS.Timeout | null>(null);
+  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
 
   // Atualizar formato automaticamente quando metadata mudar
   useEffect(() => {
@@ -28,7 +34,7 @@ export default function Downloader() {
     // carregar configurações do servidor
     (async () => {
       try {
-        const { data } = await axios.get('/api/config');
+        const { data } = await axios.get<{ config: ServerConfig }>('/api/config');
         setServerConfig(data.config || null);
         if (data.config && Array.isArray(data.config.formats)) {
           setAvailableFormats(data.config.formats);
@@ -48,18 +54,21 @@ export default function Downloader() {
     }
     infoTimer.current = setTimeout(async () => {
       try {
-        const { data } = await axios.post('/api/info', { url });
+        const { data } = await axios.post<FileMeta>('/api/info', { url });
         setMeta({
           title: data.title || null,
           format: data.format || null,
           mimeType: data.mimeType || null,
-          thumbnailUrl: data.thumbnailUrl || null
+          thumbnailUrl: data.thumbnailUrl || null,
+          type: data.type || null
         });
       } catch {
         setMeta({ title: null, format: null, mimeType: null, thumbnailUrl: null });
       }
     }, 600);
-    return () => clearTimeout(infoTimer.current);
+    return () => {
+      if (infoTimer.current) clearTimeout(infoTimer.current);
+    };
   }, [url]);
 
   const startDownload = async () => {
@@ -71,7 +80,7 @@ export default function Downloader() {
     setRunning(true);
     setDownloadUrl(null);
     try {
-      const { data } = await axios.post("/api/download", {
+      const { data } = await axios.post<DownloadResponse>("/api/download", {
         url,
         name: name || null,
         format: format || null
@@ -86,7 +95,7 @@ export default function Downloader() {
         setProgress(0);
         setMessage("Download iniciado...");
       }
-    } catch (e) {
+    } catch (e: any) {
       setRunning(false);
       setDownloadUrl(null);
       if (e.response?.data?.error) {
@@ -103,7 +112,7 @@ export default function Downloader() {
     if (!taskId) return;
     const timer = setInterval(async () => {
       try {
-        const { data } = await axios.get(`/api/progress/${taskId}`);
+        const { data } = await axios.get<DownloadProgress>(`/api/progress/${taskId}`);
         setProgress(data.progress);
         setMessage(data.message);
         // Se o backend retornar fileUrl no progresso, salva para exibir botão
@@ -160,7 +169,7 @@ export default function Downloader() {
             setDownloadUrl(null);
             setName("");
             // reset format to server default if provided
-            if (serverConfig && serverConfig.defaultFormat) setFormat(serverConfig.defaultFormat);
+            if (serverConfig?.defaultFormat) setFormat(serverConfig.defaultFormat);
           }}
           placeholder="Cole a URL do vídeo aqui"
         />
@@ -176,14 +185,18 @@ export default function Downloader() {
         </select>
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={startDownload} disabled={running}>{(serverConfig && serverConfig.ui && serverConfig.ui.downloadButtonText) || '⬇️ Download'}</button>
-          <button onClick={cancelDownload} disabled={!running} className="cancel">🛑 {(serverConfig && serverConfig.ui && serverConfig.ui.cancelText) || 'Cancelar'}</button>
+          <button onClick={startDownload} disabled={running}>
+            {serverConfig?.ui?.downloadButtonText || '⬇️ Download'}
+          </button>
+          <button onClick={cancelDownload} disabled={!running} className="cancel">
+            🛑 {serverConfig?.ui?.cancelText || 'Cancelar'}
+          </button>
         </div>
 
         {downloadUrl && (
           <div style={{ marginTop: 10 }}>
             <button onClick={handleManualDownload} className="download-ready">
-              {(serverConfig && serverConfig.ui && serverConfig.ui.manualDownloadText) || '📥 Baixar Arquivo'}
+              {serverConfig?.ui?.manualDownloadText || '📥 Baixar Arquivo'}
             </button>
             <button onClick={() => {
               setDownloadUrl(null);
@@ -193,7 +206,7 @@ export default function Downloader() {
               setUrl("");
               setName("");
             }} style={{ marginLeft: 10 }}>
-              {(serverConfig && serverConfig.ui && serverConfig.ui.anotherDownloadText) || '⚡ Fazer outro download'}
+              {serverConfig?.ui?.anotherDownloadText || '⚡ Fazer outro download'}
             </button>
           </div>
         )}
