@@ -1,6 +1,36 @@
 #!/usr/bin/env bash
 # dev.sh - inicia backend e frontend (dev) com checagem de versão do Node
 # Uso: ./dev.sh
+
+# Requisitos: Node.js >= 20.19.0
+# Estrutura do projeto:
+# downloader-full/
+#├── node_modules
+#   └── ... (módulos Node.js)
+#├── assets
+#   └── ... (imagens, estilos, etc.)
+#├── backend
+#   ├── server.js
+#   ├── package.json
+#   ├── package-lock.json
+#   └── ... (outros arquivos do backend)
+#├── frontend
+#   ├── index.html
+#   ├── src
+#   │   └── ... (arquivos fonte do frontend)
+#   ├── package.json
+#   ├── package-lock.json
+#   └── ... (outros arquivos do frontend)
+#├── config
+#   └── ... (arquivos de configuração)
+#├── logs
+#   └── ... (arquivos de log)
+#├── dev.sh
+#├── .gitignore
+#├── package.json
+#├── package-lock.json
+#├── README.md
+
 set -euo pipefail
 cd "$(dirname "$0")"
 
