@@ -1,7 +1,9 @@
 /*.log
 */*.log
 *.log
-*/logs
+*/logs/*
+
+backend/downloads/*
 
 /node_modules
 */node_modules

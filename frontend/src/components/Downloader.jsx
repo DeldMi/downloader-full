@@ -4,26 +4,16 @@ import axios from "axios";
 export default function Downloader() {
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
-  const [format, setFormat] = useState("mp4");
+  const [format, setFormat] = useState("mp4");// se for o formato padao ele tem que detequitaca se for vidio o padrao é mp4 se for audio é mp3 e tambem tem que vim do servidor
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState("");
   const [meta, setMeta] = useState({ title: null, format: null, mimeType: null, thumbnailUrl: null });
   const [taskId, setTaskId] = useState(null);
   const [running, setRunning] = useState(false);
-
-  const formats = ["mp4", "mkv", "webm", "mp3", "ts"];
-
-  const detectType = (value) => {
-    if (!value) return "Unknown";
-    const v = value.toLowerCase();
-    if (v.endsWith(".json")) return "JSON List";
-    if (v.includes(".m3u8") || v.includes(".m3u")) return "M3U8/Playlist";
-    if (v.startsWith("http")) return "Single Media or Playlist";
-    return "Local File or Unknown";
-  };
-
-  // Debounce info fetch
+  const [downloadUrl, setDownloadUrl] = useState(null);
+  const formats = ["mp4", "mkv", "webm", "mp3", "ts"]; // isso aqui tem que vim do servidor
   const infoTimer = useRef(null);
+
   useEffect(() => {
     if (infoTimer.current) clearTimeout(infoTimer.current);
     if (!url) {
@@ -39,9 +29,7 @@ export default function Downloader() {
           mimeType: data.mimeType || null,
           thumbnailUrl: data.thumbnailUrl || null
         });
-      } catch (err) {
-        // ignore metadata errors
-        console.debug('info fetch error', err);
+      } catch {
         setMeta({ title: null, format: null, mimeType: null, thumbnailUrl: null });
       }
     }, 600);
@@ -53,6 +41,9 @@ export default function Downloader() {
       setMessage("Por favor, insira uma URL.");
       return;
     }
+    setMessage("Iniciando download...");
+    setRunning(true);
+    setDownloadUrl(null);
     try {
       const { data } = await axios.post("/api/download", {
         url,
@@ -60,11 +51,25 @@ export default function Downloader() {
         format: format || null
       });
       setTaskId(data.taskId);
-      setRunning(true);
-      setProgress(0);
-      setMessage("Download iniciado...");
+      if (data.status === 'success' && data.fileUrl) {
+        setDownloadUrl(data.fileUrl);
+        setRunning(false);
+        setProgress(100);
+        setMessage("Download concluído! Clique no botão abaixo para baixar o arquivo.");
+      } else {
+        setProgress(0);
+        setMessage("Download iniciado...");
+      }
     } catch (e) {
-      setMessage("Erro ao iniciar: " + e.message);
+      setRunning(false);
+      setDownloadUrl(null);
+      if (e.response?.data?.error) {
+        setMessage("Erro: " + e.response.data.error);
+      } else if (e.code === 'ERR_NETWORK') {
+        setMessage("Erro de conexão: Verifique se o servidor backend está rodando.");
+      } else {
+        setMessage("Erro ao iniciar: " + e.message);
+      }
     }
   };
 
@@ -75,11 +80,15 @@ export default function Downloader() {
         const { data } = await axios.get(`/api/progress/${taskId}`);
         setProgress(data.progress);
         setMessage(data.message);
+        // Se o backend retornar fileUrl no progresso, salva para exibir botão
+        if (data.fileUrl && data.progress === 100) {
+          setDownloadUrl(data.fileUrl);
+        }
         if (["done", "error", "cancelled"].includes(data.status)) {
           clearInterval(timer);
           setRunning(false);
         }
-      } catch  {
+      } catch {
         clearInterval(timer);
         setRunning(false);
         setMessage("Erro ao acompanhar progresso.");
@@ -99,38 +108,73 @@ export default function Downloader() {
     }
   };
 
+  const handleManualDownload = () => {
+    if (!downloadUrl) return;
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = name || 'video';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="downloader">
-      <label>URL (.m3u8 / .m3u / json / arquivo):</label>
-      <input value={url} onChange={(e) => setUrl(e.target.value)} />
+      <h2>Downloader de Vídeo</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <label>URL (.m3u8 / .m3u / json / arquivo):</label>
+        <input
+          value={url}
+          onChange={e => {
+            setUrl(e.target.value);
+            setProgress(0);
+            setMessage("");
+            setTaskId(null);
+            setDownloadUrl(null);
+            setName("");
+          }}
+          placeholder="Cole a URL do vídeo aqui"
+        />
 
-      <label>Nome do arquivo (opcional):</label>
-      <input value={name} onChange={(e) => setName(e.target.value)} />
+        <label>Nome do arquivo (opcional):</label>
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome do arquivo" />
 
-      <label>Formato de saída:</label>
-      <select value={format} onChange={(e) => setFormat(e.target.value)}>
-        {formats.map((f) => (
-          <option key={f} value={f}>
-            {f}
-          </option>
-        ))}
-      </select>
+        <label>Formato de saída:</label>
+        <select value={format} onChange={e => setFormat(e.target.value)}>
+          {formats.map(f => (
+            <option key={f} value={f}>{f}</option>
+          ))}
+        </select>
 
-      <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
-        <button onClick={startDownload} disabled={running}>⬇️ Download</button>
-        <button onClick={cancelDownload} disabled={!running}>🛑 Cancelar</button>
-      </div>
-
-      <p>Tipo detectado: <b>{detectType(url)}</b></p>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 6 }}>
-        <div>
-          <p style={{ margin: 0 }}><b>Formato:</b> {meta.format || format}</p>
-          <p style={{ margin: 0 }}><b>Tipo (MIME):</b> {meta.mimeType || 'desconhecido'}</p>
-          {meta.title && <p style={{ margin: 0 }}><b>Título:</b> {meta.title}</p>}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={startDownload} disabled={running}>⬇️ Download</button>
+          <button onClick={cancelDownload} disabled={!running} className="cancel">🛑 Cancelar</button>
         </div>
-        <div>
+
+        {downloadUrl && (
+          <div style={{ marginTop: 10 }}>
+            <button onClick={handleManualDownload} className="download-ready">
+              📥 Baixar Arquivo
+            </button>
+            <button onClick={() => {
+              setDownloadUrl(null);
+              setTaskId(null);
+              setProgress(0);
+              setMessage("");
+              setUrl("");
+              setName("");
+            }} style={{ marginLeft: 10 }}>
+              ⚡ Fazer outro download
+            </button>
+          </div>
+        )}
+
+        <div className="meta-info">
+          <p>Tipo detectado: <b>{url ? (url.toLowerCase().includes('m3u8') ? 'M3U8/Playlist' : 'Arquivo') : '-'}</b></p>
+          <p><b>Formato:</b> {meta.format || format}</p>
+          <p><b>Tipo (MIME):</b> {meta.mimeType || 'desconhecido'}</p>
+          {meta.title && <p><b>Título:</b> {meta.title}</p>}
           {meta.thumbnailUrl ? (
-            // size 70x50
             <img src={meta.thumbnailUrl} alt="thumbnail" width={70} height={50} style={{ objectFit: 'cover', borderRadius: 4 }} />
           ) : (
             <div style={{ width: 70, height: 50, background: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4 }}>
@@ -138,10 +182,11 @@ export default function Downloader() {
             </div>
           )}
         </div>
+
+        <p>Progresso: {progress}%</p>
+        <progress value={progress} max="100"></progress>
+        <p>{message}</p>
       </div>
-      <p>Progresso: {progress}%</p>
-      <progress value={progress} max="100"></progress>
-      <p>{message}</p>
     </div>
   );
 }
